@@ -97,14 +97,18 @@ def mirror_and_zip(clone_url, repo_name, workdir):
 
 
 def ensure_release(vault, repo, token):
+    body = (f"Automated mirror backups of {repo['html_url']}\n\n"
+            f"Restore: unzip, then `git clone <extracted-dir> {repo['name']}`")
     rel = gh_request("GET", f"{API}/repos/{vault}/releases/tags/{repo['name']}", token, ok404=True)
     if rel:
+        if rel.get("body") != body:  # keep the source URL current if it ever changes
+            rel = gh_request("PATCH", f"{API}/repos/{vault}/releases/{rel['id']}", token,
+                             data={"body": body})
         return rel
     return gh_request("POST", f"{API}/repos/{vault}/releases", token, data={
         "tag_name": repo["name"],
         "name": repo["name"],
-        "body": f"Automated mirror backups of {repo['html_url']}\n\n"
-                f"Restore: unzip, then `git clone <extracted-dir> {repo['name']}`",
+        "body": body,
     })
 
 
