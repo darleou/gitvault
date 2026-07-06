@@ -1,0 +1,42 @@
+name: Backup
+
+on:
+  schedule:
+    - cron: '19 1,7,13,19 * * *'   # 4x daily (UTC)
+  workflow_dispatch:
+    inputs:
+      force_all:
+        description: 'Force backup of every repo, even unchanged ones'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run backup
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BACKUP_USERNAME: ${{ secrets.BACKUP_USERNAME }}
+        run: python3 backup.py ${{ inputs.force_all && '--force-all' || '' }}
+
+      - name: Commit updated state
+        if: always()
+        run: |
+          git config user.name "gitvault-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add state.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: update backup state"
+            git pull --rebase origin ${GITHUB_REF_NAME}
+            git push
+          fi
